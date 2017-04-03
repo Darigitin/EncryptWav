@@ -4,7 +4,7 @@ import view.TriviumView;
 import model.TriviumModel;
 
 public class TriviumController {
-    private TriviumView view = new TriviumView();
+    private TriviumView view = new TriviumView(this);
     private static String key, IV;
     private String filePath = view.getFilePath();
 
