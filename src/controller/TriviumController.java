@@ -4,20 +4,21 @@ import view.TriviumView;
 import model.TriviumModel;
 
 public class TriviumController {
-    private TriviumView view = new TriviumView(this);
+    private TriviumView view;
     private static String key, IV;
-    private String filePath = view.getFilePath();
+    private String filePath;
 
 
     public TriviumController(){
-        run();
+        view = new TriviumView(this);
     }
 
-    private void run()
+    public void run()
     {
         getKeys();
         boolean[] keyArray = sizeKeys(key);
         boolean[] IVArray = sizeKeys(IV);
+        filePath = view.getFilePath();
 
         String fileExtension = ".wav";
         String filePathToReadFrom = filePath + fileExtension;
