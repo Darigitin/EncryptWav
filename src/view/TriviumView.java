@@ -22,7 +22,7 @@ public class TriviumView extends JFrame{
     private JTextField privateKeyField;
     private JTextField publicKeyField;
     private JButton record;
-    private static final long RECORD_TIME = 10;
+    private static final long RECORD_TIME = 10000;
     private AudioFileFormat.Type fileType = AudioFileFormat.Type.WAVE;
     private TargetDataLine line;
 
@@ -97,123 +97,24 @@ public class TriviumView extends JFrame{
         try{
             AudioFormat format = getAudioFormat();
             DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
-            Mixer mixer = new Mixer() {
-                @Override
-                public Info getMixerInfo() {
-                    return null;
-                }
+            Mixer mixer = null;
 
-                @Override
-                public Line.Info[] getSourceLineInfo() {
-                    return new Line.Info[0];
-                }
-
-                @Override
-                public Line.Info[] getTargetLineInfo() {
-                    return new Line.Info[0];
-                }
-
-                @Override
-                public Line.Info[] getSourceLineInfo(Line.Info info) {
-                    return new Line.Info[0];
-                }
-
-                @Override
-                public Line.Info[] getTargetLineInfo(Line.Info info) {
-                    return new Line.Info[0];
-                }
-
-                @Override
-                public boolean isLineSupported(Line.Info info) {
-                    return false;
-                }
-
-                @Override
-                public Line getLine(Line.Info info) throws LineUnavailableException {
-                    return null;
-                }
-
-                @Override
-                public int getMaxLines(Line.Info info) {
-                    return 0;
-                }
-
-                @Override
-                public Line[] getSourceLines() {
-                    return new Line[0];
-                }
-
-                @Override
-                public Line[] getTargetLines() {
-                    return new Line[0];
-                }
-
-                @Override
-                public void synchronize(Line[] lines, boolean b) {
-
-                }
-
-                @Override
-                public void unsynchronize(Line[] lines) {
-
-                }
-
-                @Override
-                public boolean isSynchronizationSupported(Line[] lines, boolean b) {
-                    return false;
-                }
-
-                @Override
-                public Line.Info getLineInfo() {
-                    return null;
-                }
-
-                @Override
-                public void open() throws LineUnavailableException {
-
-                }
-
-                @Override
-                public void close() {
-
-                }
-
-                @Override
-                public boolean isOpen() {
-                    return false;
-                }
-
-                @Override
-                public Control[] getControls() {
-                    return new Control[0];
-                }
-
-                @Override
-                public boolean isControlSupported(Control.Type type) {
-                    return false;
-                }
-
-                @Override
-                public Control getControl(Control.Type type) {
-                    return null;
-                }
-
-                @Override
-                public void addLineListener(LineListener lineListener) {
-
-                }
-
-                @Override
-                public void removeLineListener(LineListener lineListener) {
-
+            for(Mixer.Info thisMixerInfo : AudioSystem.getMixerInfo()){
+                //System.out.println(thisMixerInfo.getName());
+                if(thisMixerInfo.getName().equals("Primary Sound Capture Driver")) {
+                    mixer = AudioSystem.getMixer(thisMixerInfo);
                 }
             }
+            if (mixer.equals(null)){
+                System.out.println("Mixer not found");
+                System.exit(0);
+            }
 
-            if (!AudioSystem.isLineSupported(info)){
+            if (!mixer.isLineSupported(info)){
                 System.out.println("Line not supported");
                 System.exit(0);
             }
-            line = (TargetDataLine) AudioSystem.getLine(info);
+            line = (TargetDataLine) mixer.getLine(info);
             System.out.println(line.toString());
             line.open(format);
             line.start();
