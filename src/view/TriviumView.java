@@ -7,8 +7,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 
 public class TriviumView extends JFrame{
 
@@ -16,15 +15,16 @@ public class TriviumView extends JFrame{
     private JButton openButton;
     private JFileChooser chooser;
     private File file, wavFile;
-    private JButton submit;
+    private JButton submit, record, stop;
     private String publicKey;
     private String privateKey;
     private JTextField privateKeyField;
     private JTextField publicKeyField;
-    private JButton record;
-    private static final long RECORD_TIME = 10000;
+//    private static final long RECORD_TIME = 10000;
     private AudioFileFormat.Type fileType = AudioFileFormat.Type.WAVE;
     private TargetDataLine line;
+    private boolean running;
+    private ByteArrayOutputStream out;
 
 
     private AudioFormat getAudioFormat(){
@@ -68,9 +68,12 @@ public class TriviumView extends JFrame{
        openButton = new JButton("Select a audio file");
        openButton.addActionListener(handler);
        keyPanel.add(openButton);
-       record = new JButton("Record an audio file");
+       record = new JButton("Record");
        record.addActionListener(handler);
        keyPanel.add(record);
+       stop = new JButton("Stop");
+       stop.addActionListener(handler);
+       keyPanel.add(stop);
        submit = new JButton("Submit");
        keyPanel.add(submit);
        submit.addActionListener(handler);
@@ -93,11 +96,13 @@ public class TriviumView extends JFrame{
         return publicKey;
     }
 
-    private void startRecord(){
-        try{
-            AudioFormat format = getAudioFormat();
+
+    private void captureAudio() {
+        try {
+            final AudioFormat format = getAudioFormat();
             DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
             Mixer mixer = null;
+            System.out.println(format.getFrameSize());
 
             for(Mixer.Info thisMixerInfo : AudioSystem.getMixerInfo()){
                 //System.out.println(thisMixerInfo.getName());
@@ -105,34 +110,79 @@ public class TriviumView extends JFrame{
                     mixer = AudioSystem.getMixer(thisMixerInfo);
                 }
             }
-            if (mixer.equals(null)){
-                System.out.println("Mixer not found");
-                System.exit(0);
-            }
-
+            assert mixer != null;
             if (!mixer.isLineSupported(info)){
                 System.out.println("Line not supported");
                 System.exit(0);
             }
             line = (TargetDataLine) mixer.getLine(info);
-            System.out.println(line.toString());
             line.open(format);
             line.start();
-            System.out.println("Start capturing...");
-            AudioInputStream ais = new AudioInputStream(line);
-            System.out.println("Start recording...");
-            AudioSystem.write(ais, fileType, wavFile);
+            Runnable runner = new Runnable() {
+                int bufferSize = (int)format.getSampleRate()
+                        * format.getFrameSize();
+                byte buffer[] = new byte[bufferSize];
+
+
+                public void run() {
+                    out = new ByteArrayOutputStream();
+                    running = true;
+                    try {
+                        while (running) {
+                            int count = line.read(buffer, 0, buffer.length);
+                            if (count > 0) {
+                                out.write(buffer, 0, count);
+                            }
+                        }
+                        line.close();
+                        out.close();
+                    } catch (IOException e) {
+                        System.err.println("I/O problems: " + e);
+                        System.exit(-1);
+                    }
+                }
+            };
+            Thread captureThread = new Thread(runner);
+            captureThread.start();
+        } catch (LineUnavailableException e) {
+            System.err.println("Line unavailable: " + e);
+            System.exit(-2);
         }
-        catch(LineUnavailableException | IOException ex){
-            ex.printStackTrace();
-        }
+    }
+    private void writeAudio() {
+        byte audio[] = out.toByteArray();
+        InputStream input =
+                new ByteArrayInputStream(audio);
+        final AudioFormat format = getAudioFormat();
+        final AudioInputStream ais =
+                new AudioInputStream(input, format,
+                        audio.length / format.getFrameSize());
+
+        Runnable runner = new Runnable() {
+            int bufferSize = (int) format.getSampleRate()
+                    * format.getFrameSize();
+            byte buffer[] = new byte[bufferSize];
+
+            public void run() {
+                try {
+                    int count;
+                    while ((count = ais.read(
+                            buffer, 0, buffer.length)) != -1) {
+                        if (count > 0) {
+                            AudioSystem.write(ais, fileType, wavFile);
+                        }
+                    }
+                    ais.close();
+                } catch (IOException e) {
+                    System.err.println("I/O problems: " + e);
+                    System.exit(-3);
+                }
+            }
+        };
+        Thread playThread = new Thread(runner);
+        playThread.start();
     }
 
-    private void finish(){
-        line.stop();
-        line.close();
-        System.out.println("Finished");
-    }
 
     private class ButtonHandler implements ActionListener{
 
@@ -150,19 +200,20 @@ public class TriviumView extends JFrame{
                 publicKey = publicKeyField.getText();
                 controller.run();
             }
-            else if (source == record){
+            else if (source == record) {
                 wavFile = new File("RecordAudio.wav");
-                Thread stopper = new Thread(() -> {
-                    try {
-                        Thread.sleep(RECORD_TIME);
-                    }catch (InterruptedException ex){
-                        ex.printStackTrace();
-                    }
-                    finish();
-                });
-                stopper.start();
-                startRecord();
+                record.setEnabled(false);
+                stop.setEnabled(true);
+                captureAudio();
             }
+            else if (source == stop){
+                record.setEnabled(true);
+                stop.setEnabled(false);
+                running = false;
+                writeAudio();
+
+            }
+
         }
     }
 }
